@@ -1,0 +1,98 @@
+---
+title: "Edx_R_Collinearity"
+author: "Joanna Yeh"
+date: "2017/12/30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+-
+```{r}
+sex <- factor(rep(c("female","male"),each=4))
+trt <- factor(c("A","A","B","B","C","C","D","D"))
+X <- model.matrix( ~ sex + trt)
+qr(X)$rank
+Y <- 1:8
+makeYstar <- function(a,b) Y - X[,2] * a - X[,5] * b
+fitTheRest <- function(a,b) {
+  Ystar <- makeYstar(a,b)
+  Xrest <- X[,-c(2,5)]
+  betarest <- solve(t(Xrest) %*% Xrest) %*% t(Xrest) %*% Ystar
+  residuals <- Ystar - Xrest %*% betarest
+  sum(residuals^2)
+}
+
+#exercises 2
+fitTheRest(1,2)
+```
+
+We can run fitTheRest on a grid of values, using the following code (the Vectorize() is necessary as outer() requires only vectorized functions)
+```{r}
+betas <- expand.grid(-2,8)
+rss <- apply(betas,1,function(x) fitTheRest(x[1],x[2]))
+
+betas <- expand.grid(1,5)
+rss <- apply(betas,1,function(x) fitTheRest(x[1],x[2]))
+rss
+#exercise 3
+## Note that all pairs add to 6
+themin <- min(rss)
+betas[which(rss==themin),]
+
+```
+
+Visualize the sum of squared residuals over our grid with the imagemat() function from rafalib
+```{r}
+library(rafalib)
+## plot the pairs what are minimum
+themin <- min(rss)
+plot(betas[which(rss==themin),])
+#There is clearly not a single beta which optimizes the least squares equation, due to collinearity, but an infinite line of solutions which produce an identical sum of squares values.
+```
+
+QR Factorization
+```{r}
+set.seed(1)
+n <- 50; M <- 500
+x <- seq(1, M, len = n)
+X <- cbind(1, x, x^2, x^3)
+beta <- matrix(c(1,1,1,1),4,1)
+y <- X%*%beta + rnorm(n, sd=1)
+plot(x,y)
+
+#added the fitted value line to the plot
+fitted <- tcrossprod(Q)%*%y
+lines(x,fitted, col = 2)
+
+```
+
+QR decoomposition
+```{r}
+QR <- qr(X)
+Q <- qr.Q(QR)
+R <- qr.R(QR)
+betahat <- backsolve(R, crossprod(Q, y))
+betahat
+
+#the above implies can use only one function "solve.qr()" to get the same outcome
+QR <- qr(X)
+betahat <- solve.qr(QR, y)
+betahat
+
+```
+
+```{r}
+#degree of freedom
+df <- length(y) - QR$rank 
+sigma2 <- sum((y-fitted)^2)/df
+var <- sigma2*chol2inv(QR$qr)
+SE <- sqrt(diag(var))
+cbind(betahat,SE)
+
+#another approach using lm function to get the same outcome as above
+summary(lm(y~X-1))$coef
+```
+
