@@ -1,0 +1,94 @@
+---
+title: "Social Analytics_Facebook"
+author: "Joanna Yeh"
+date: "2018/1/7"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+install.packages("Rfacebook")
+install.packages("devtools")
+library(devtools)
+install_github("Rfacebook", "pablobarbera", subdir="Rfacebook")
+library(Rfacebook)
+```
+
+```{r}
+token <- "EAACEdEose0cBAGddl0TwZALBJZC1XGJSEUKJgqvkjZABl1ENcemN5gCS1IAfOtBS9olfpMOjWMSYYGwFxdZANB3i3O41mOBw0djJI5mBIv7p4P5gtrZBByyibEMTRNaJZCYi8NVmJpEWTEa8uJiw9HTBXVFu4wj2ZAT92MkGJW1c1QdKDsx38idI3x0jpxfcVIx3U2djnkPSQZDZD"
+me <- getUsers("me", token, private_info = TRUE)
+me$name
+```
+
+```{r}
+require("Rfacebook")
+fb.oauth <- fbOAuth(
+  app_id = "250940808774974",
+  app_secret = "56ef3e4aa7660d7179f01474877f1b0c",
+  extended_permissions = TRUE
+  )
+```
+
+```{r}
+me <- getUsers("me", token = fb.oauth)
+me$name
+```
+
+#將fb_oauth 存起來，用load函數讀進來
+```{r}
+save(fb.oauth, file="fb_oauth")
+load("fb_oauth")
+```
+
+```{r}
+page.id <- "1091025577669172"
+page <- getPage(page.id, token, n = 300)
+str(page)
+```
+
+#make plots
+```{r}
+#convert FB date format to R date format
+format.facebook.date <- function(datestring){
+  data <- as.POSIXct(datestring, format = "%Y-%m-%dT%H:%M:%S+0000",tz = "GMT")
+}
+#aggregate metric counts over month
+aggregate.metric <- function(metric){
+  m <- aggregate(page[[paste0(metric, "_count")]], list(month = page$month), mean)
+  m$month <- as.Date(paste0(m$month, "-15"))
+  m$metric <- metric
+  return(m)
+}
+#create data frame with avg metric counts per month
+page$datetime <- format.facebook.date(page$created_time)
+page$month <- format(page$datetime, "%Y-%m")
+df.list <- lapply(c("likes", "comments", "shares"), aggregate.metric)
+df <- do.call(rbind, df.list)
+
+#visualize evolution in metric
+library(ggplot2)
+library(scales)
+ggplot(df, aes(x = month, y = x, group = metric)) +
+  geom_line(aes(color = metric)) +
+  scale_y_log10("Average count per post", breaks = c(2, 10, 50, 100))+
+  theme_bw()+
+  theme(axis.title = element_blank())
+```
+
+```{r}
+top.post <- page[which.max(page$likes_count), ]
+top.post
+```
+
+#analyze those who like the top post 
+```{r}
+load("fb_oauth")
+post <- getPost(top.post$id, token, n = 1000, like = TRUE, comments = FALSE)
+users <- getUsers(post$likes$from_id, token)
+
+```
+
